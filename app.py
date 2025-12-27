@@ -99,15 +99,27 @@ if st.session_state.active:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Escribe tu argumento..."):
+# Captura de input del usuario
+    if prompt := st.chat_input("Escribe tu argumento aquí..."):
+        # 1. Mostrar mensaje del usuario
         st.chat_message("user").markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
+        
+        # 2. Intentar obtener respuesta (Zona Segura)
+        bot_reply = None
         try:
-            resp = st.session_state.chat.send_message(prompt)
-            with st.chat_message("model"): st.markdown(resp.text)
-            st.session_state.messages.append({"role": "model", "content": resp.text})
+            response = st.session_state.chat.send_message(prompt)
+            bot_reply = response.text
+        except Exception as e:
+            st.error(f"Error de conexión: {e}")
+
+        # 3. Si hubo respuesta, mostrarla y recargar
+        if bot_reply:
+            with st.chat_message("model"):
+                st.markdown(bot_reply)
+            st.session_state.messages.append({"role": "model", "content": bot_reply})
             st.rerun()
-        except: st.error("Error de conexión.")
 
 else:
+
     st.info("👈 Ingresa tu nombre y estilo en el menú lateral para comenzar.")
