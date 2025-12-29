@@ -76,7 +76,9 @@ with st.sidebar:
             st.session_state.turnos = 1 # Iniciamos en turno 1
             
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            
+            # --- CORRECCIÓN CRÍTICA: USAMOS EL ALIAS GENÉRICO ---
+            model = genai.GenerativeModel('gemini-flash-latest')
             
             # Iniciar chat (sin historial previo, el prompt se inyecta en cada mensaje)
             st.session_state.chat = model.start_chat(history=[])
