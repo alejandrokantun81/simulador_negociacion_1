@@ -42,6 +42,7 @@ def check_password():
                 st.error("Credenciales incorrectas.")
     return False
 
+# Verificación de seguridad antes de cargar la app
 if not check_password():
     st.stop()
 
@@ -155,11 +156,12 @@ if st.session_state.active:
         instruccion = obtener_instruccion_sistema(st.session_state.turnos, st.session_state.nombre_alumno)
         prompt_final = f"{prompt} \n\n[SISTEMA: {instruccion}]"
         
+        # --- AQUÍ INICIA EL BLOQUE CRÍTICO ---
         try:
             response = st.session_state.chat.send_message(prompt_final)
             bot_reply = response.text
             
-            # --- AQUÍ ESTABA EL ERROR, YA CORREGIDO ---
+            # Línea corregida y segura
             has_chart = "<GRAFICA_INVENTARIO>" in bot_reply
             has_audio = "<AUDIO_CONFIDENCIAL>" in bot_reply
             bot_reply = bot_reply.replace("<GRAFICA_INVENTARIO>", "").replace("<AUDIO_CONFIDENCIAL>", "").strip()
@@ -173,7 +175,10 @@ if st.session_state.active:
                 st.session_state.active = False
             else:
                 st.rerun()
+        
+        # --- AQUÍ CIERRA EL BLOQUE OBLIGATORIO ---
         except Exception as e:
             st.error(f"Error: {e}")
+
 else:
     st.info("👈 Ingresa el nombre del participante para iniciar.")
