@@ -14,20 +14,16 @@ st.set_page_config(
 # --- 2. SISTEMA DE AUTENTICACIÓN (LOGIN) ---
 def check_password():
     """Retorna True si el usuario ingresó credenciales correctas."""
-    
-    # DEFINA AQUÍ SUS USUARIOS Y CONTRASEÑAS
     credenciales_validas = {
-        "admin": "admin123",      # Para usted
-        "cobay": "clase2025",     # Para sus alumnos
-        "demo": "prueba1",        # Para clientes potenciales
-        "cliente_vip": "maderas"  # Ejemplo comercial
+        "admin": "admin123",      
+        "cobay": "clase2025",     
+        "demo": "prueba1",        
+        "cliente_vip": "maderas"  
     }
     
-    # Verificar si ya inició sesión
     if st.session_state.get("logged_in", False):
         return True
     
-    # Interfaz de Login
     st.header("🔐 Acceso al Simulador de Negociación")
     st.markdown("Este es un entorno de entrenamiento privado. Por favor identifíquese.")
     
@@ -43,18 +39,11 @@ def check_password():
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("Credenciales incorrectas. Contacte al administrador.")
-    
+                st.error("Credenciales incorrectas.")
     return False
 
-# SI NO ESTÁ LOGUEADO, DETENER EL CÓDIGO AQUÍ
 if not check_password():
     st.stop()
-
-# ==========================================
-#      A PARTIR DE AQUÍ: EL SIMULADOR
-#      (Solo se ejecuta si check_password es True)
-# ==========================================
 
 # --- 3. LÓGICA DE VÍCTOR KOVACS ---
 def obtener_instruccion_sistema(turno_actual, nombre_alumno):
@@ -66,7 +55,6 @@ def obtener_instruccion_sistema(turno_actual, nombre_alumno):
     """
     
     comportamiento_turno = ""
-    
     if turno_actual <= 2:
         comportamiento_turno = f"FASE DE APERTURA (Turno {turno_actual}): Saluda a {nombre_alumno} con frialdad. Rechaza su propuesta. Exige el 25%."
     elif turno_actual == 3:
@@ -90,7 +78,6 @@ def obtener_instruccion_sistema(turno_actual, nombre_alumno):
 
 # --- 4. BARRA LATERAL ---
 with st.sidebar:
-    # Botón de Logout (Nuevo)
     if st.button("Cerrar Sesión 🔒"):
         st.session_state.logged_in = False
         st.rerun()
@@ -172,7 +159,21 @@ if st.session_state.active:
             response = st.session_state.chat.send_message(prompt_final)
             bot_reply = response.text
             
+            # --- AQUÍ ESTABA EL ERROR, YA CORREGIDO ---
             has_chart = "<GRAFICA_INVENTARIO>" in bot_reply
             has_audio = "<AUDIO_CONFIDENCIAL>" in bot_reply
-bot_reply = bot_reply.replace("<GRAFICA_INVENTARIO>", "").replace("<AUDIO_CONFIDENCIAL>", "").strip()
+            bot_reply = bot_reply.replace("<GRAFICA_INVENTARIO>", "").replace("<AUDIO_CONFIDENCIAL>", "").strip()
 
+            st.session_state.messages.append({"role": "model", "content": bot_reply, "has_chart": has_chart, "has_audio": has_audio})
+            st.session_state.turnos += 1
+            
+            if "Trato hecho" in bot_reply:
+                st.balloons()
+                st.success(f"🏆 ¡TRATO CERRADO! Bien hecho, {st.session_state.nombre_alumno}.")
+                st.session_state.active = False
+            else:
+                st.rerun()
+        except Exception as e:
+            st.error(f"Error: {e}")
+else:
+    st.info("👈 Ingresa el nombre del participante para iniciar.")
