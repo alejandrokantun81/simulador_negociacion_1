@@ -174,4 +174,5 @@ if st.session_state.active:
             
             has_chart = "<GRAFICA_INVENTARIO>" in bot_reply
             has_audio = "<AUDIO_CONFIDENCIAL>" in bot_reply
-            bot_reply = bot_reply.replace("<GRAFICA_INVENTARIO>", "").replace("<AUDIO_CONFIDENCIAL>",
+bot_reply = bot_reply.replace("<GRAFICA_INVENTARIO>", "").replace("<AUDIO_CONFIDENCIAL>", "").strip()
+
