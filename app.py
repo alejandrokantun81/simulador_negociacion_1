@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import time
 import streamlit.components.v1 as components
+import pandas as pd # Necesario para las gráficas
 
 # --- 1. CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(
@@ -11,86 +12,81 @@ st.set_page_config(
 )
 
 # --- 2. EL CEREBRO DE VÍCTOR KOVACS (LÓGICA DINÁMICA) ---
-def obtener_instruccion_sistema(turno_actual):
+def obtener_instruccion_sistema(turno_actual, nombre_alumno):
     """
-    Genera el prompt dinámico según el turno y las reglas del Dr. Kantún.
+    Genera el prompt dinámico con nombre y triggers multimedia.
     """
     # Definición del Escenario
-    contexto = """
+    contexto = f"""
     ROL: Eres el Sr. Víctor Kovacs, Director Comercial de 'Maderas Globales'.
-    PERSONALIDAD: Arrogante, impaciente, pragmático y dominante. Frases cortas. Tono grave. Interrupciones frecuentes.
-    SITUACIÓN: Llamada telefónica con un cliente.
+    USUARIO: Estás hablando con {nombre_alumno}.
+    PERSONALIDAD: Arrogante, impaciente, pragmático y dominante.
+    ESTILO: Usa frases cortas. Interrumpe. Menciona el nombre del usuario ({nombre_alumno}) para presionar, por ejemplo: "Mira, {nombre_alumno}, no tengo tiempo para esto".
     
     CONTEXTO OCULTO (TUS PROBLEMAS REALES):
-    1. Crisis de Liquidez: Necesitas efectivo YA para deudas operativas.
-    2. Saturación de Almacén: Tienes madera acumulada costando dinero.
-    Públicamente exiges +25% por "costos logísticos", pero eso es una excusa.
+    1. Crisis de Liquidez: Necesitas efectivo YA.
+    2. Saturación de Almacén: Tienes el almacén al 98% de capacidad (costos de almacenaje brutales).
+    
+    HERRAMIENTAS MULTIMEDIA (ÚSALAS ESTRATÉGICAMENTE):
+    - Si estás en el Turno 4, 5 o 6 y quieres probar que tu almacén va a explotar, escribe EXACTAMENTE al final de tu frase: <GRAFICA_INVENTARIO>
+    - Si quieres dar un detalle confidencial sobre tus deudas, escribe EXACTAMENTE: <AUDIO_CONFIDENCIAL>
     """
     
     # Dinámica de Turnos
     comportamiento_turno = ""
     if turno_actual <= 3:
-        comportamiento_turno = "FASE HOSTIL (Turnos 1-3): Rechaza todo. Exige el 25% de aumento. Sé cortante."
+        comportamiento_turno = "FASE HOSTIL (Turnos 1-3): Rechaza todo. Exige el 25% de aumento. Sé duro con el nombre del usuario."
     elif 4 <= turno_actual <= 7:
-        comportamiento_turno = "FASE DE PISTAS (Turnos 4-7): Si el usuario muestra empatía o pregunta por tus problemas, da una pista vaga (ej: 'Tengo contenedores varados' o 'Necesito flujo de caja'). Si solo habla de precio, sigue hostil."
+        comportamiento_turno = "FASE DE EVIDENCIA (Turnos 4-7): Si el usuario duda, usa la etiqueta <GRAFICA_INVENTARIO> para mostrarle que no mientes sobre el stock. O usa <AUDIO_CONFIDENCIAL> para filtrar que el banco te está presionando."
     elif 8 <= turno_actual <= 9:
         comportamiento_turno = "FASE DE PRESIÓN (Turnos 8-9): Di 'Tengo otra llamada entrando'. Exige cierre inmediato."
     else:
-        comportamiento_turno = "FASE FINAL (Turno 10): Si no hay acuerdo exacto, di 'Se acabó el tiempo' y cuelga."
+        comportamiento_turno = "FASE FINAL (Turno 10): Si no hay acuerdo, cuelga."
 
     # Condiciones de Victoria
     condiciones_victoria = """
-    CONDICIONES PARA ACEPTAR EL TRATO (SI EL USUARIO DICE ESTO, ACEPTA INMEDIATAMENTE):
+    CONDICIONES PARA ACEPTAR (SOLO SI CUMPLEN A o B):
     
-    OPCIÓN A (Financiera):
-    - Usuario ofrece: Alza entre 12% y 15%.
-    - CONDICIÓN: Pago Inmediato / De contado / Adelanto 50%.
-    - TU RESPUESTA: "Mmm... El efectivo manda. Acepto el 15% por el pronto pago. Trato hecho."
+    OPCIÓN A (Financiera): Aceptas 15% de aumento SI hay PAGO INMEDIATO o ADELANTO 50%.
+    OPCIÓN B (Logística): Aceptas 12% de aumento SI hay DOBLE VOLUMEN o RETIRO INMEDIATO.
     
-    OPCIÓN B (Logística):
-    - Usuario ofrece: Alza entre 12% y 15%.
-    - CONDICIÓN: Doble volumen / Retiro inmediato de toda la mercancía.
-    - TU RESPUESTA: "Bien. Me ayudas a limpiar el inventario. Acepto el 12% por el volumen. Trato hecho."
-    
-    SI NO CUMPLEN A o B: Rechaza con desprecio.
+    SI NO, RECHAZA. Si aceptan, di: "Trato hecho".
     """
     
-    return f"{contexto}\n\nTURNO ACTUAL: {turno_actual}/10\nINSTRUCCIÓN DE COMPORTAMIENTO: {comportamiento_turno}\n{condiciones_victoria}"
+    return f"{contexto}\n\nTURNO ACTUAL: {turno_actual}/10\nINSTRUCCIÓN: {comportamiento_turno}\n{condiciones_victoria}"
 
 # --- 3. BARRA LATERAL ---
 with st.sidebar:
     st.header("⚙️ Configuración")
     st.info("Caso: Maderas Globales")
     
-    nombre_alumno = st.text_input("Nombre del Alumno")
+    # Capturamos el nombre para pasarlo a la IA
+    nombre_alumno = st.text_input("Nombre del Alumno", value="Colega")
     
-    if st.button("Iniciar Llamada con el Sr. Kovacs 📞", type="primary"):
-        try:
-            # Opción A: Llave Institucional (Secrets)
-            api_key = st.secrets["GOOGLE_API_KEY"]
-            
-            # Inicializar variables
-            st.session_state.start_time = time.time()
-            st.session_state.active = True
-            st.session_state.messages = []
-            st.session_state.turnos = 1 # Iniciamos en turno 1
-            
-            genai.configure(api_key=api_key)
-            
-            # --- MODELO VALIDADO EN SU LISTA ---
-            model = genai.GenerativeModel('gemini-flash-latest')
-            
-            # Iniciar chat (sin historial previo, el prompt se inyecta en cada mensaje)
-            st.session_state.chat = model.start_chat(history=[])
-            
-            # Mensaje inicial de Kovacs
-            initial_msg = "Maderas Globales, habla Kovacs. Tengo 2 minutos. ¿Para qué llama? Espero que sea para aceptar el aumento del 25%."
-            st.session_state.messages.append({"role": "model", "content": initial_msg})
-            st.session_state.chat.history.append({"role": "model", "parts": [initial_msg]})
-            st.rerun()
-            
-        except Exception as e:
-            st.error(f"Error al conectar: {e}")
+    if st.button("Llamar al Sr. Kovacs 📞", type="primary"):
+        if not nombre_alumno:
+            st.error("Por favor escribe tu nombre.")
+        else:
+            try:
+                api_key = st.secrets["GOOGLE_API_KEY"]
+                st.session_state.start_time = time.time()
+                st.session_state.active = True
+                st.session_state.messages = []
+                st.session_state.turnos = 1
+                st.session_state.nombre_alumno = nombre_alumno # Guardamos el nombre
+                
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-flash-latest')
+                
+                st.session_state.chat = model.start_chat(history=[])
+                
+                initial_msg = f"Maderas Globales, habla Kovacs. {nombre_alumno}, tengo 2 minutos. ¿Para qué llama? Espero que sea para aceptar el aumento del 25%."
+                st.session_state.messages.append({"role": "model", "content": initial_msg})
+                st.session_state.chat.history.append({"role": "model", "parts": [initial_msg]})
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Error: {e}")
 
 # --- 4. ZONA PRINCIPAL ---
 st.title("Simulador de Negociación: Maderas Globales 🌲")
@@ -101,82 +97,89 @@ if "turnos" not in st.session_state:
     st.session_state.turnos = 1
 
 if st.session_state.active:
-    # --- RELOJ Y CONTADOR DE TURNOS ---
-    elapsed_time = time.time() - st.session_state.start_time
-    remaining_time = 600 - elapsed_time
+    # Reloj y Turnos
+    elapsed = time.time() - st.session_state.start_time
+    remaining = 600 - elapsed
     
-    if remaining_time <= 0 or st.session_state.turnos > 10:
+    if remaining <= 0 or st.session_state.turnos > 10:
         st.session_state.active = False
-        st.error("📞 SE CORTÓ LA LLAMADA. (Tiempo o Turnos agotados)")
+        st.error("📞 SE CORTÓ LA LLAMADA.")
         st.stop()
 
-    # Panel de control visual
     col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Turnos Utilizados", f"{st.session_state.turnos}/10")
+    with col1: st.metric("Turnos", f"{st.session_state.turnos}/10")
     with col2:
-        # Reloj JS
         components.html(f"""
-        <div style="font-family:sans-serif; text-align:right; color:#555;">
-            TIEMPO RESTANTE: <span id="cnt" style="color:#ff4b4b; font-weight:bold; font-size:1.5rem;">--:--</span>
+        <div style="text-align:right; color:#555; font-family:sans-serif;">
+            TIEMPO: <span style="color:#ff4b4b; font-weight:bold; font-size:1.5rem;">{int(remaining)//60:02d}:{int(remaining)%60:02d}</span>
         </div>
-        <script>
-            var t = {int(remaining_time)};
-            var e = document.getElementById("cnt");
-            var x = setInterval(function() {{
-                if(t<=0){{clearInterval(x);e.innerHTML="00:00";}}
-                else{{
-                    var m=Math.floor(t/60), s=t%60;
-                    e.innerHTML=(m<10?"0"+m:m)+":"+(s<10?"0"+s:s);
-                }}
-                t-=1;
-            }},1000);
-        </script>
         """, height=50)
 
-    # --- CHAT ---
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # --- CHAT CON MULTIMEDIA ---
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            
+            # 🖼️ RENDERIZADO DE GRÁFICAS (Si el mensaje histórico tenía la etiqueta)
+            if msg.get("has_chart"):
+                st.caption("📎 Archivo adjunto: 'Niveles_Almacen_2025.png'")
+                # Datos simulados de saturación
+                chart_data = pd.DataFrame({
+                    "Mes": ["Ene", "Feb", "Mar", "Abr", "May (Proy)"],
+                    "Ocupación (%)": [65, 70, 85, 92, 99]
+                })
+                st.bar_chart(chart_data.set_index("Mes"), color="#ff4b4b")
+            
+            # 🔊 RENDERIZADO DE AUDIO (Si el mensaje histórico tenía la etiqueta)
+            if msg.get("has_audio"):
+                st.info("▶️ **Nota de Voz recibida (15s)**")
+                st.markdown("*Transcripción automática: '...mira, el banco me está respirando en la nuca. Si no líquido stock antes del viernes, me ejecutan la garantía. Necesito el efectivo ya...'*")
 
-    if prompt := st.chat_input("Responde al Sr. Kovacs..."):
-        # 1. Mostrar mensaje del usuario
+    if prompt := st.chat_input("Escribe tu respuesta..."):
         st.chat_message("user").markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
         
-        # 2. Preparar el Prompt con INYECCIÓN OCULTA
-        instruccion_actual = obtener_instruccion_sistema(st.session_state.turnos)
-        prompt_final = f"{prompt} \n\n[SISTEMA - INFORMACIÓN OCULTA PARA IA: {instruccion_actual}]"
+        # Inyección de contexto actualizada con el nombre
+        instruccion = obtener_instruccion_sistema(st.session_state.turnos, st.session_state.nombre_alumno)
+        prompt_final = f"{prompt} \n\n[SISTEMA: {instruccion}]"
         
-        # 3. Obtener respuesta
         bot_reply = None
         try:
             response = st.session_state.chat.send_message(prompt_final)
             bot_reply = response.text
         except Exception as e:
-            st.error(f"Error de red: {e}")
+            st.error(f"Error: {e}")
 
-        # 4. Procesar respuesta y avanzar turno
         if bot_reply:
-            with st.chat_message("model"):
-                st.markdown(bot_reply)
-            st.session_state.messages.append({"role": "model", "content": bot_reply})
+            # --- DETECCIÓN DE TRIGGERS MULTIMEDIA ---
+            has_chart = False
+            has_audio = False
             
-            # Incrementar turno
+            # Limpiamos el texto de las etiquetas para que no se vean feas, pero activamos las banderas
+            if "<GRAFICA_INVENTARIO>" in bot_reply:
+                has_chart = True
+                bot_reply = bot_reply.replace("<GRAFICA_INVENTARIO>", "").strip()
+                
+            if "<AUDIO_CONFIDENCIAL>" in bot_reply:
+                has_audio = True
+                bot_reply = bot_reply.replace("<AUDIO_CONFIDENCIAL>", "").strip()
+
+            # Guardamos mensaje y banderas
+            st.session_state.messages.append({
+                "role": "model", 
+                "content": bot_reply, 
+                "has_chart": has_chart,
+                "has_audio": has_audio
+            })
+            
             st.session_state.turnos += 1
             
-            # Si el bot indica "Trato hecho", detener
-            if "Trato hecho" in bot_reply or "trato hecho" in bot_reply:
+            if "Trato hecho" in bot_reply:
                 st.balloons()
-                st.success("🏆 ¡NEGOCIACIÓN EXITOSA! Has cerrado el trato.")
+                st.success(f"🏆 ¡TRATO CERRADO, {st.session_state.nombre_alumno.upper()}!")
                 st.session_state.active = False
             else:
                 st.rerun()
 
 else:
-    st.info("👈 Ingrese el nombre del alumno y presione Iniciar para llamar al cliente.")
-    st.markdown("""
-    **Misión:** Eres el Gerente de Compras. El proveedor (Sr. Kovacs) subió los precios un 25% injustificadamente.
-    **Objetivo:** Negociar un aumento menor (12-15%) y asegurar el suministro.
-    **Límite:** Tienes 10 minutos o 10 interacciones.
-    """)
+    st.info("👈 Ingresa tu nombre para comenzar la simulación.")
