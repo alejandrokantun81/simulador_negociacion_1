@@ -77,7 +77,7 @@ with st.sidebar:
             
             genai.configure(api_key=api_key)
             
-            # --- CORRECCIÓN CRÍTICA: USAMOS EL ALIAS GENÉRICO ---
+            # --- MODELO VALIDADO EN SU LISTA ---
             model = genai.GenerativeModel('gemini-flash-latest')
             
             # Iniciar chat (sin historial previo, el prompt se inyecta en cada mensaje)
